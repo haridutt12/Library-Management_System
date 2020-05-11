@@ -4,6 +4,7 @@ import string
 from functools import wraps
 
 import datetime
+# from flask_sqlalchemy import
 import jwt
 from flask import Blueprint, jsonify
 from flask import Flask, request, make_response, Response
@@ -69,22 +70,25 @@ def token_required(f):
 @api.route('/users', methods=['GET', 'POST'])
 def add_users():
     if request.method == "POST":
-        email = request.json["email"]
-        username = request.json["username"]
-        fname = request.json["fname"]
-        lname = request.json["lname"]
-        role = request.json["role"]
+
+        username = request.json['username']
 
         if Users.query.filter_by(username=username).first():
-            return '{"err":"user already exist"}', 400
+            return make_response({"err": "user already exist"}, 400)
 
-        new_user = Users(username, email, fname, lname, role)
+        new_user = Users()
+        new_user.email = request.json["email"]
+        new_user.username = request.json["username"]
+        new_user.fname = request.json["fname"]
+        new_user.lname = request.json["lname"]
+        new_user.role = request.json["role"]
 
         db.session.add(new_user)
         db.session.commit()
 
         token = ''.join(
             random.choices(string.ascii_uppercase + string.digits, k=20))
+
         user_authentication = UserAuthentication(username, token)
         db.session.add(user_authentication)
         db.session.commit()
@@ -136,38 +140,106 @@ def page_not_found(e):
 @api.route('/books', methods=["GET", "POST"])
 @token_required
 def books():
-    if request.method == "GET" and request.user.role == 'student':
+    if request.method == "GET":
         all_books = Books.query.all()
         return BooksSchema(many=True).jsonify(all_books)
-    book_data = request.json
-    book = Books(book_data)
-    db.session.add(book)
-    db.session.commit()
-    return BooksSchema.jsonify(book)
+
+    book = Books.query.filter_by(isbn=request.json['isbn']).first()
+    if book:
+        book.isbn = request.json['isbn']
+        book.publisher = request.json['publisher']
+        book.author = request.json['author']
+        book.publication_year = request.json['publication_year']
+        book.category = request.json['category']
+        book.count = request.json['count']
+        book.title = request.json['title']
+        db.session.commit()
+        return BooksSchema().jsonify(book)
+    else:
+        book = Books()
+        book.isbn = request.json['isbn']
+        book.title = request.json['title']
+        book.publisher = request.json['publisher']
+        book.author = request.json['author']
+        book.publication_year = request.json['publication_year']
+        book.category = request.json['category']
+        book.count = request.json['count']
+
+        db.session.add(book)
+        db.session.commit()
+        return BooksSchema().jsonify(book)
 
 
 @api.route('/books/<isbn>/issue', methods=["GET", "POST"])
 @token_required
 def issue(isbn):
-    if request.method == "GET" and request.user.role == 'staff':
-        issued_book = BookIssue.query.filter_by(isbn=isbn)
-        return BookIssueSchema.jsonify(issued_book)
+    def is_already_assigned():
+        # check if book belongs to library or not
+        book = Books.query.filter_by(isbn=isbn).first()
+        try:
+            if book:
+                issued_books = BookIssue.query.filter_by(uid=request.json['uid'])
+                for b in issued_books:
+                    if b.bid == int(isbn) and b.status == 'active':
+                        return True
+                return False
+        except Exception as e:
+            print(e)
 
     if request.method == "POST" and request.user.role == 'staff':
-        user_id = request.json["uid"]
-        book = Books.query.filter_by(isbn=isbn).first()
-        book_count = book.count
-        if book_count > 0:
-            book_issue = BookIssue(isbn, user_id)
-            db.session.add(book_issue)
-            db.session.commit()
-            book.count -= 1
-            db.session.add(book)
-            db.session.commit()
-        return make_response('Book Not Available', 403)
+        if not is_already_assigned():
+            user_id = request.json["uid"]
+            book = Books.query.filter_by(isbn=isbn).first()
+            book_count = book.count
+            if book_count > 0:
+                book_issue = BookIssue(isbn, user_id, "active")
+                db.session.add(book_issue)
+                db.session.commit()
+                book.count -= 1
+                db.session.add(book)
+                db.session.commit()
+                return make_response("book Assigned", 200)
+            return make_response("Book Not Available", 404)
+
+        return make_response('Book Already Assigned', 403)
 
     return make_response('Not Allowed', 405)
 
+
+@api.route('/books/issued')
+@token_required
+def get_issued_books():
+    if request.user.role == 'staff':
+        issued_books = BookIssue.query.all()
+        return BookIssueSchema(many=True).jsonify(issued_books)
+
+
+@api.route('/books/<isbn>/return', methods=["GET", "POST"])
+@token_required
+def book_return(isbn):
+    """TODO: check if book pre assigned or not"""
+    if request.method == "POST" and request.user.role == "staff":
+        book = Books.query.filter_by(isbn=isbn).first()
+        book.count = book.count + 1
+        db.session.commit()
+        issued_book = BookIssue.query.filter_by(
+            uid=request.json['uid']).first()
+        issued_book.status = 'inactive'
+        db.session.commit()
+        return make_response({"Returned": book.isbn}, 200)
+
+
+@api.route('/users/profile')
+@token_required
+def user_profile():
+    user = request.user
+    return make_response({"user": UserSchema().dump(user)}, 200)
+
+
+#
+# @api.route('/users/<uid>/fine')
+# @token_required
+#
 
 if __name__ == '__main__':
     app = create_app()

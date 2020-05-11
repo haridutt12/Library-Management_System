@@ -25,6 +25,11 @@ class BookCategoryEnum(str, enum.Enum):
     mba = 'mba'
 
 
+class BookIssueStatusEnum(str, enum.Enum):
+    active = 'active'
+    inactive = 'inactive'
+
+
 class BaseModel(db.Model):
     __abstract__ = True
 
@@ -46,17 +51,12 @@ class Users(BaseModel):
     status = db.Column(db.Enum(UserStatusEnum), default=UserStatusEnum.pending,
                        nullable=False)
 
-    def __init__(self, username, email, fname, lname, role):
-        self.username = username
-        self.email = email
-        self.fname = fname
-        self.lname = lname
-        self.role = role
-
 
 class UserSchema(ma.Schema):
     class Meta:
-        fields = ('id', 'username', 'email', 'status')
+        fields = (
+        'id', 'username', 'email', 'status', 'fname', 'lname', 'role',
+        'status')
 
 
 class UserAuthentication(BaseModel):
@@ -78,16 +78,7 @@ class Books(db.Model):
     publication_year = db.Column(db.DATE)
     category = db.Column(db.Enum(BookCategoryEnum))
     count = db.Column(db.INTEGER)
-
-    def __init__(self, isbn, title, author, publisher, publication_year,
-                 category, count):
-        self.isbn = isbn
-        self.title = title
-        self.author = author
-        self.publisher = publisher
-        self.publication_year = publication_year
-        self.category = category
-        self.count = count
+    # url = db.Column(db.String(100))
 
 
 class BooksSchema(ma.Schema):
@@ -100,12 +91,14 @@ class BooksSchema(ma.Schema):
 class BookIssue(BaseModel):
     bid = db.Column(db.INTEGER, db.ForeignKey('books.isbn'))
     uid = db.Column(db.INTEGER, db.ForeignKey('users.id'))
+    status = db.Column(db.Enum(BookIssueStatusEnum))
 
-    def __init__(self, bid, uid):
+    def __init__(self, bid, uid, status):
         self.bid = bid
         self.uid = uid
+        self.status = status
 
 
 class BookIssueSchema(ma.Schema):
     class Meta:
-        fields = ('bid', 'uid')
+        fields = ('bid', 'uid', 'status')
