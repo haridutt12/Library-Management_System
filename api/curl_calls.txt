@@ -1,0 +1,29 @@
+
+#add user
+curl -X POST -H 'Content-Type: application/json'  -d @./api/user_data.txt  http://localhost:5000/users
+
+#activate user
+curl -X POST -H 'Content-Type: application/json' -d '{"password": "password"}'   http://localhost:5000/activate/GVT42KQNS45RXOZTAIPT
+
+#login
+curl -u raj:password  -H "Content-Type: application/json"  http://localhost:5000/login -v
+
+#user_profile
+curl -H "Authorization:$TOKEN"  http://localhost:5000/users/profile
+
+#issue_book
+curl -X POST -H 'Content-Type: application/json' -H "Authorization:$TOKEN" -d '{"uid":1}' http://localhost:5000/books/1/issue
+
+#add_book
+curl  -H 'Content-Type: application/json' -H "Authorization:$TOKEN"  -d '{"isbn":1, "title":"A Intruduction to Algorithms",
+"author":"Thomas H. Cormen", "publisher":"Charles Leiserson", "publication_year":"2014-01-21", "category":"cse", "count":1}'
+http://localhost:5000/books
+
+#get issued books
+curl -H "Authorization:$TOKEN"  http://localhost:5000/books/issued
+
+#get all books
+curl -H "Authorization:$TOKEN"  http://localhost:5000/books
+
+#return book
+curl -X POST -H 'Content-Type: application/json' -H "Authorization:$TOKEN" -d '{"uid":1}' http://localhost:5000/books/1/return

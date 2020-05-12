@@ -24,16 +24,9 @@ def get_env_variable(name):
 
 # the values of those depend on your setup and these values are stored in
 # activate script of venv
-POSTGRES_URL = get_env_variable("POSTGRES_URL")
-POSTGRES_USER = get_env_variable("POSTGRES_USER")
-POSTGRES_PW = get_env_variable("POSTGRES_PW")
-POSTGRES_DB = get_env_variable("POSTGRES_DB")
 
-
-def create_app():
+def create_app(DB_URL):
     app = Flask(__name__)
-    DB_URL = 'postgres+psycopg2://{user}:{pw}@{url}/{db}'.format(
-        user=POSTGRES_USER, pw=POSTGRES_PW, url=POSTGRES_URL, db=POSTGRES_DB)
     app.config['SQLALCHEMY_DATABASE_URI'] = DB_URL
     app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
     app.config['SECRET_KEY'] = "secretkey"
@@ -97,7 +90,7 @@ def add_users():
                               "token": token}, 200)
 
     all_users = Users.query.all()
-    return UserSchema(many=True).jsonify(all_users)
+    return make_response({"user": UserSchema(many=True).dump(all_users)}, 200)
 
 
 @api.route('/activate/<token>', methods=['POST'])
@@ -114,7 +107,7 @@ def activate_user(token):
     ua.varified = True
     db.session.add(ua)
     db.session.commit()
-    return Response({"verified": True}, status=200)
+    return make_response({"verified": True}, 200)
 
 
 @api.route('/login')
@@ -178,7 +171,8 @@ def issue(isbn):
         book = Books.query.filter_by(isbn=isbn).first()
         try:
             if book:
-                issued_books = BookIssue.query.filter_by(uid=request.json['uid'])
+                issued_books = BookIssue.query.filter_by(
+                    uid=request.json['uid'])
                 for b in issued_books:
                     if b.bid == int(isbn) and b.status == 'active':
                         return True
@@ -242,5 +236,11 @@ def user_profile():
 #
 
 if __name__ == '__main__':
-    app = create_app()
+    POSTGRES_URL = get_env_variable("POSTGRES_URL")
+    POSTGRES_USER = get_env_variable("POSTGRES_USER")
+    POSTGRES_PW = get_env_variable("POSTGRES_PW")
+    POSTGRES_DB = get_env_variable("POSTGRES_DB")
+    DB_URL = 'postgres+psycopg2://{user}:{pw}@{url}/{db}'.format(
+    user=POSTGRES_USER, pw=POSTGRES_PW, url=POSTGRES_URL, db=POSTGRES_DB)
+    app = create_app(DB_URL)
     app.run(debug=True)
