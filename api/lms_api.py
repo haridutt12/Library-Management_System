@@ -4,9 +4,8 @@ import string
 from functools import wraps
 
 import datetime
-# from flask_sqlalchemy import
 import jwt
-from flask import Blueprint, jsonify
+from flask import Blueprint, jsonify, current_app
 from flask import Flask, request, make_response, Response
 from models import Users, UserSchema, db, ma, UserAuthentication, Books, \
     BookIssue, BooksSchema, BookIssueSchema
@@ -48,7 +47,7 @@ def token_required(f):
             return jsonify({'message': 'provide token'})
 
         try:
-            data = jwt.decode(token, app.config['SECRET_KEY'])
+            data = jwt.decode(token, current_app.config['SECRET_KEY'])
             data_list = list(data.values())
             user_obj = Users.query.filter_by(username=data_list[0]).first()
             setattr(request, "user", user_obj)
@@ -82,7 +81,9 @@ def add_users():
         token = ''.join(
             random.choices(string.ascii_uppercase + string.digits, k=20))
 
-        user_authentication = UserAuthentication(username, token)
+        user_authentication = UserAuthentication()
+        user_authentication.username = username
+        user_authentication.token = token
         db.session.add(user_authentication)
         db.session.commit()
 
@@ -110,16 +111,16 @@ def activate_user(token):
     return make_response({"verified": True}, 200)
 
 
-@api.route('/login')
+@api.route('/login', methods=["GET"])
 def login():
     auth = request.authorization
     user = Users.query.filter_by(username=auth.username).first()
     if user and user.password == auth.password:
         token = jwt.encode({'user': auth.username,
                             'exp': datetime.datetime.utcnow() + datetime.timedelta(
-                                days=7)}, app.config['SECRET_KEY'])
+                                days=7)}, current_app.config['SECRET_KEY'])
 
-        return jsonify({'token': token.decode('UTF-8')})
+        return make_response({'token': token.decode('UTF-8')}, 200)
 
     return make_response('Could not verify!', 401)
 
@@ -135,7 +136,7 @@ def page_not_found(e):
 def books():
     if request.method == "GET":
         all_books = Books.query.all()
-        return BooksSchema(many=True).jsonify(all_books)
+        return make_response({"book":BooksSchema(many=True).dump(all_books)}, 200)
 
     book = Books.query.filter_by(isbn=request.json['isbn']).first()
     if book:
@@ -147,7 +148,7 @@ def books():
         book.count = request.json['count']
         book.title = request.json['title']
         db.session.commit()
-        return BooksSchema().jsonify(book)
+        return make_response({"Book": BooksSchema().dump(book)}, 200)
     else:
         book = Books()
         book.isbn = request.json['isbn']
@@ -160,7 +161,7 @@ def books():
 
         db.session.add(book)
         db.session.commit()
-        return BooksSchema().jsonify(book)
+        return make_response({"Book": BooksSchema().dump(book)}, 200)
 
 
 @api.route('/books/<isbn>/issue', methods=["GET", "POST"])
@@ -186,7 +187,10 @@ def issue(isbn):
             book = Books.query.filter_by(isbn=isbn).first()
             book_count = book.count
             if book_count > 0:
-                book_issue = BookIssue(isbn, user_id, "active")
+                book_issue = BookIssue()
+                book_issue.bid = isbn
+                book_issue.uid = user_id
+                book_issue.status = "active"
                 db.session.add(book_issue)
                 db.session.commit()
                 book.count -= 1
@@ -205,13 +209,13 @@ def issue(isbn):
 def get_issued_books():
     if request.user.role == 'staff':
         issued_books = BookIssue.query.all()
-        return BookIssueSchema(many=True).jsonify(issued_books)
+        return make_response({"issued books": BookIssueSchema(many=True).dump(issued_books)}, 200)
+    return make_response('Not Authorized for this operation', 401)
 
 
 @api.route('/books/<isbn>/return', methods=["GET", "POST"])
 @token_required
 def book_return(isbn):
-    """TODO: check if book pre assigned or not"""
     if request.method == "POST" and request.user.role == "staff":
         book = Books.query.filter_by(isbn=isbn).first()
         book.count = book.count + 1
@@ -227,7 +231,9 @@ def book_return(isbn):
 @token_required
 def user_profile():
     user = request.user
-    return make_response({"user": UserSchema().dump(user)}, 200)
+    issued_books = BookIssue.query.filter_by(uid=user.id)
+    return make_response({"user": UserSchema().dump(user),
+                          "issued books": BookIssueSchema(many=True).dump(issued_books)}, 200)
 
 
 #

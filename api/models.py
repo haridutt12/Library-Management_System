@@ -64,10 +64,6 @@ class UserAuthentication(BaseModel):
     token = db.Column(db.String(20))
     varified = db.Column(db.Boolean, default=False)
 
-    def __init__(self, username, token):
-        self.username = username
-        self.token = token
-
 
 class Books(db.Model):
     __tablename__ = 'books'
@@ -92,11 +88,6 @@ class BookIssue(BaseModel):
     bid = db.Column(db.INTEGER, db.ForeignKey('books.isbn'))
     uid = db.Column(db.INTEGER, db.ForeignKey('users.id'))
     status = db.Column(db.Enum(BookIssueStatusEnum))
-
-    def __init__(self, bid, uid, status):
-        self.bid = bid
-        self.uid = uid
-        self.status = status
 
 
 class BookIssueSchema(ma.Schema):
