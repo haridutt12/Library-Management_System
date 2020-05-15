@@ -3,12 +3,13 @@ import random
 import string
 from functools import wraps
 
-import datetime
+from datetime import datetime
 import jwt
 from flask import Blueprint, jsonify, current_app
 from flask import Flask, request, make_response, Response
 from models import Users, UserSchema, db, ma, UserAuthentication, Books, \
-    BookIssue, BooksSchema, BookIssueSchema
+    BookIssue, BooksSchema, BookIssueSchema, Fines, FineSchema, CollectedFines, \
+    CollectedFineSchema
 
 api = Blueprint("api", "/v0")
 
@@ -136,7 +137,8 @@ def page_not_found(e):
 def books():
     if request.method == "GET":
         all_books = Books.query.all()
-        return make_response({"book":BooksSchema(many=True).dump(all_books)}, 200)
+        return make_response({"book": BooksSchema(many=True).dump(all_books)},
+                             200)
 
     book = Books.query.filter_by(isbn=request.json['isbn']).first()
     if book:
@@ -181,25 +183,39 @@ def issue(isbn):
         except Exception as e:
             print(e)
 
-    if request.method == "POST" and request.user.role == 'staff':
-        if not is_already_assigned():
-            user_id = request.json["uid"]
-            book = Books.query.filter_by(isbn=isbn).first()
-            book_count = book.count
-            if book_count > 0:
-                book_issue = BookIssue()
-                book_issue.bid = isbn
-                book_issue.uid = user_id
-                book_issue.status = "active"
-                db.session.add(book_issue)
-                db.session.commit()
-                book.count -= 1
-                db.session.add(book)
-                db.session.commit()
-                return make_response("book Assigned", 200)
-            return make_response("Book Not Available", 404)
+    def collect_fine():
+        user = Fines.query.filter_by(uid=request.json['uid']).first()
+        if user:
+            fine = user.fine
+            user.fine = 0
+            db.session.commit()
+            user = CollectedFines()
+            user.uid = request.json['uid']
+            user.fine = fine
+            db.session.add(user)
+            db.session.commit()
+        return True
 
-        return make_response('Book Already Assigned', 403)
+    if request.method == "POST" and request.user.role == 'staff':
+        if collect_fine():
+            if not is_already_assigned():
+                user_id = request.json["uid"]
+                book = Books.query.filter_by(isbn=isbn).first()
+                book_count = book.count
+                if book_count > 0:
+                    book_issue = BookIssue()
+                    book_issue.bid = isbn
+                    book_issue.uid = user_id
+                    book_issue.status = "active"
+                    db.session.add(book_issue)
+                    db.session.commit()
+                    book.count -= 1
+                    db.session.add(book)
+                    db.session.commit()
+                    return make_response("book Assigned", 200)
+                return make_response("Book Not Available", 404)
+
+            return make_response('Book Already Assigned', 403)
 
     return make_response('Not Allowed', 405)
 
@@ -209,7 +225,9 @@ def issue(isbn):
 def get_issued_books():
     if request.user.role == 'staff':
         issued_books = BookIssue.query.all()
-        return make_response({"issued books": BookIssueSchema(many=True).dump(issued_books)}, 200)
+        return make_response(
+            {"issued books": BookIssueSchema(many=True).dump(issued_books)},
+            200)
     return make_response('Not Authorized for this operation', 401)
 
 
@@ -217,11 +235,21 @@ def get_issued_books():
 @token_required
 def book_return(isbn):
     if request.method == "POST" and request.user.role == "staff":
+        # Fine Collection
+        user = Fines.query.filter_by(uid=request.json['uid']).first()
+        collected_fine = CollectedFines()
+        collected_fine.uid = request.json['uid']
+        collected_fine.fine = user.fine
+        db.session.add(collected_fine)
+        db.session.commit()
+        user.fine = 0
+        db.session.commit()
+
+        # Update book count  in Books table after return and changing status
         book = Books.query.filter_by(isbn=isbn).first()
         book.count = book.count + 1
         db.session.commit()
-        issued_book = BookIssue.query.filter_by(
-            uid=request.json['uid']).first()
+        issued_book = BookIssue.query.filter_by(uid=request.json['uid'], bid=isbn, status='active').first()
         issued_book.status = 'inactive'
         db.session.commit()
         return make_response({"Returned": book.isbn}, 200)
@@ -233,13 +261,37 @@ def user_profile():
     user = request.user
     issued_books = BookIssue.query.filter_by(uid=user.id)
     return make_response({"user": UserSchema().dump(user),
-                          "issued books": BookIssueSchema(many=True).dump(issued_books)}, 200)
+                          "issued books": BookIssueSchema(many=True).dump(
+                              issued_books)}, 200)
 
 
-#
-# @api.route('/users/<uid>/fine')
-# @token_required
-#
+@api.route('/users/<uid>/fine')
+@token_required
+def user_fine(uid):
+    issued_books = BookIssue.query.filter_by(uid=uid).all()
+    active_books = [book for book in issued_books if book.status == "active"]
+
+    total_fine = 0
+    for book in active_books:
+        delay = datetime.now() - book.created_at
+        if delay.days > 14:
+            fine = (delay.days - 14) * 10
+            total_fine += fine
+
+    fined_user = Fines.query.filter_by(uid=uid).first()
+    if fined_user:
+        fined_user.fine = total_fine
+        db.session.commit()
+    else:
+        fined_user = Fines()
+        fined_user.uid = uid
+        fined_user.fine = total_fine
+        db.session.add(fined_user)
+        db.session.commit()
+
+    user = Fines.query.filter_by(uid=uid).first()
+    return make_response({"Fines": FineSchema().dump(user)}, 200)
+
 
 if __name__ == '__main__':
     POSTGRES_URL = get_env_variable("POSTGRES_URL")
@@ -247,6 +299,6 @@ if __name__ == '__main__':
     POSTGRES_PW = get_env_variable("POSTGRES_PW")
     POSTGRES_DB = get_env_variable("POSTGRES_DB")
     DB_URL = 'postgres+psycopg2://{user}:{pw}@{url}/{db}'.format(
-    user=POSTGRES_USER, pw=POSTGRES_PW, url=POSTGRES_URL, db=POSTGRES_DB)
+        user=POSTGRES_USER, pw=POSTGRES_PW, url=POSTGRES_URL, db=POSTGRES_DB)
     app = create_app(DB_URL)
     app.run(debug=True)

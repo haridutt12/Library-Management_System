@@ -93,3 +93,25 @@ class BookIssue(BaseModel):
 class BookIssueSchema(ma.Schema):
     class Meta:
         fields = ('bid', 'uid', 'status')
+
+
+class Fines(db.Model):
+    id = db.Column(db.INTEGER, primary_key=True)
+    uid = db.Column(db.INTEGER, db.ForeignKey('users.id'))
+    fine = db.Column(db.INTEGER, default=0)
+
+
+class FineSchema(ma.Schema):
+    class Meta:
+        fields = ('uid', 'fine')
+
+
+class CollectedFines(db.Model):
+    id = db.Column(db.INTEGER, primary_key=True)
+    uid = db.Column(db.INTEGER, db.ForeignKey('users.id'))
+    fine = db.Column(db.INTEGER, default=0)
+
+
+class CollectedFineSchema(ma.Schema):
+    class Meta:
+        fields = ('uid', 'fine')
