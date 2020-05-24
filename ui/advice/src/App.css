@@ -1,0 +1,122 @@
+#root,  html, body {
+    margin: 0;
+    padding: 0;
+    height: 100vh;
+    box-sizing: border-box;
+}
+
+/*img  { max-width: 100%; }*/
+
+.app {
+    height: 100%;
+    background: linear-gradient(rgba(0, 0, 0, 0.3), rgba(0, 0, 0, 0.3)), url("./images/background.jpg");
+    background-size: cover;
+    background-position: center;
+    justify-content: center;
+    align-items: center;
+    text-align: center;
+}
+
+.card {
+    background-color: transparent;
+    background: linear-gradient(rgba(0, 0, 0, 0.2), rgba(0, 0, 0, 0.2));
+    color: lightgoldenrodyellow;
+    width: 40%;
+    height: 20%;
+    display: flex;
+    align-items: center;
+    flex-direction: column;
+    padding: 0;
+    font-family: 'Spartan', sans-serif;
+}
+
+.header {
+    color: lightgoldenrodyellow;
+    display: flex;
+    align-items: center;
+    height: 580px;
+    font-family: 'Spartan', sans-serif;
+
+}
+
+.button {
+    position: relative;
+    left: 250px;
+    background-color: black;
+    border-radius: 10px;
+
+}
+
+.button span {
+    background: linear-gradient(rgba(0, 0, 0, 0.3), rgba(0, 0, 0, 0.3));
+    color: white;
+    font-size: 15px;
+    font-weight: 200;
+    letter-spacing: 0.7px;
+}
+
+.button:hover {
+    animation: rotate 0.7s ease-in-out both;
+}
+
+.button:hover span {
+    animation: storm 0.7s ease-in-out both;
+    animation-delay: 0.06s;
+}
+
+@keyframes rotate {
+    0% {
+        transform: rotate(0deg) translate3d(0, 0, 0);
+    }
+    25% {
+        transform: rotate(3deg) translate3d(0, 0, 0);
+    }
+    50% {
+        transform: rotate(-3deg) translate3d(0, 0, 0);
+    }
+    75% {
+        transform: rotate(1deg) translate3d(0, 0, 0);
+    }
+    100% {
+        transform: rotate(0deg) translate3d(0, 0, 0);
+    }
+}
+
+@keyframes storm {
+    0% {
+        transform: translate3d(0, 0, 0) translateZ(0);
+    }
+    25% {
+        transform: translate3d(4px, 0, 0) translateZ(0);
+    }
+    50% {
+        transform: translate3d(-3px, 0, 0) translateZ(0);
+    }
+    75% {
+        transform: translate3d(2px, 0, 0) translateZ(0);
+    }
+    100% {
+        transform: translate3d(0, 0, 0) translateZ(0);
+    }
+}
+
+
+.App {
+    text-align: center;
+    color: lightgoldenrodyellow;
+    font-family: 'Spartan', sans-serif;
+}
+/*@media (min-width: 640px) { body {font-size:1rem;} }*/
+/*@media (min-width:960px) { body {font-size:1.2rem;} }*/
+/*@media (min-width:1100px) { body {font-size:1.5rem;} }*/
+
+@media (min-device-width:600px) {
+    img[data-src-600px] {
+        content: attr(data-src-600px, url);
+    }
+}
+@media (min-device-width:800px) {
+    img[data-src-800px] {
+        content: attr(data-src-800px, url);
+    }
+}
